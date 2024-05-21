@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 module MyLib (qrFilter) where
 
 import qualified Data.Text as T
@@ -23,18 +25,31 @@ qrFilter = toJSONFilter $ qrFilter_ getTmpPath
 qrFilter_ :: IO String -> Block -> IO Block
 qrFilter_ getPath blk =
   case blk of
-  Figure figAttr capt [Plain [Image attr@(_,classes,_) alt (tgt,titleText)]]
-    | "qr" `elem` classes -> do
+  Figure figAttr capt [Plain [QRImage attr alt (tgt,titleText)]] ->
+    do
       let config = QRConfig tgt titleText attr alt
       qr <- generateQRImage getPath config
       return $ Figure figAttr capt [Plain [qr]]
-  Para [Image attr@(_,classes,_) alt (tgt,titleText)]
-    | "qr" `elem` classes -> do
+  Para [QRImage attr alt (tgt,titleText)] ->
+    do
       let config = QRConfig tgt titleText attr alt
       qr <- generateQRImage getPath config
       return $ Figure nullAttr emptyCaption [Plain [qr]]
   _notLink ->
     return blk
+
+pattern QRImage :: Attr -> [Inline] -> (T.Text,T.Text) -> Inline
+pattern QRImage x y z <- (matchQRImage -> Just (x,y,z))
+
+matchQRImage :: Inline -> Maybe (Attr,[Inline],(T.Text,T.Text))
+matchQRImage (Image attr alt tgtTitle)
+  | attr `isClass` "qr" = Just (attr,alt,tgtTitle)
+matchQRImage _ = Nothing
+
+isClass :: Attr -> T.Text -> Bool
+isClass (_,classes,_) c =
+  c `elem` classes
+  
 
 generateQRImage :: IO String -> QRConfig -> IO Inline
 generateQRImage getPath config = do
